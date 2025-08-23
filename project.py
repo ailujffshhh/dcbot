@@ -5,41 +5,43 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from openai import OpenAI
 import PyPDF2
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
-from reportlab.platypus.flowables import HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from fastapi import FastAPI
-import uvicorn
-import asyncio
+import threading
+
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
+
 
 client_ai = OpenAI(
     base_url="https://router.huggingface.co/v1",
     api_key=HF_API_KEY,
 )
 
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=None, intents=intents)
 
-# FastAPI server to keep bot alive on Render
+
 app = FastAPI()
 
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
 
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"✅ Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}")
 
-# PDF processing functions
+
 def extract_pdf_text(file_path):
     text = ""
     with open(file_path, "rb") as f:
@@ -55,15 +57,6 @@ def markdown_to_pdf(text):
     text = re.sub(r'`(.*?)`', r'<font face="Courier">\1</font>', text)
     text = re.sub(r'^\s*---\s*$', '<hr/>', text, flags=re.MULTILINE)
     return text
-
-def split_reviewer_text(text):
-    lines = []
-    for paragraph in text.split("\n"):
-        paragraph = paragraph.strip()
-        if paragraph:
-            sentences = [s.strip() for s in paragraph.split(". ") if s.strip()]
-            lines.extend(sentences)
-    return lines
 
 def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc = SimpleDocTemplate(output_file, pagesize=letter)
@@ -85,12 +78,10 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
         textColor=colors.black
     )
 
-    elements = []
-    elements.append(Paragraph("Study Reviewer", title_style))
-    elements.append(Spacer(1, 12))
-
+    elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
     formatted_text = markdown_to_pdf(text)
     sections = formatted_text.split('<hr/>')
+
     for i, sec in enumerate(sections):
         for paragraph in sec.strip().split("\n"):
             paragraph = paragraph.strip()
@@ -100,11 +91,11 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
         if i < len(sections) - 1:
             elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
             elements.append(Spacer(1, 8))
-    
+
     doc.build(elements)
     return output_file
 
-# /review command
+
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
@@ -114,14 +105,16 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         return
 
     await interaction.response.send_message(
-        f"📄 Processing your file **{file.filename}** into a reviewer, stay still...",
+        f"📄 Processing your file **{file.filename}** into a reviewer, please wait...",
         ephemeral=True
     )
 
     try:
+
         file_path = f"./{file.filename}"
         await file.save(file_path)
 
+        # Extract text
         pdf_text = extract_pdf_text(file_path)
         if not pdf_text:
             await interaction.followup.send(
@@ -139,13 +132,16 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         )
         reviewer_text = response.choices[0].message.content
 
+
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
 
+ 
         await interaction.followup.send(
             content="📝 Your reviewer is ready! Download it below:",
             file=discord.File(output_file),
             ephemeral=True
         )
+
 
         os.remove(file_path)
         os.remove(output_file)
@@ -155,12 +151,15 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             f"❌ Error processing file: {str(e)}", ephemeral=True
         )
 
-# Run bot and web server
-async def main():
-    loop = asyncio.get_event_loop()
-    bot_task = loop.create_task(bot.start(DISCORD_TOKEN))
-    uvicorn_task = loop.create_task(uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), log_level="info"))
-    await asyncio.gather(bot_task, uvicorn_task)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    
+    def start_webserver():
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+
+    web_thread = threading.Thread(target=start_webserver, daemon=True)
+    web_thread.start()
+
+
+    bot.run(DISCORD_TOKEN)
