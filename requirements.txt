@@ -3,3 +3,5 @@ python-dotenv
 openai
 PyPDF2
 reportlab
+fastapi
+uvicorn
