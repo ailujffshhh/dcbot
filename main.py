@@ -99,45 +99,59 @@ async def on_message(message: discord.Message):
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message("⚠️ Please upload a valid PDF file.", ephemeral=True)
+        await interaction.response.send_message(
+            "⚠️ Please upload a valid **PDF file**.", ephemeral=True
+        )
         return
 
-    await interaction.response.defer(thinking=True)
+    await interaction.response.send_message(
+        f"📄 Processing your file **{file.filename}** into a reviewer, stay still motherfucker...",
+        ephemeral=True
+    )
 
     try:
+        # Save PDF locally
         file_path = f"./{file.filename}"
         await file.save(file_path)
 
+        # Extract text
         pdf_text = extract_pdf_text(file_path)
+        if not pdf_text:
+            await interaction.followup.send(
+                "⚠️ Could not extract any text from the PDF.", ephemeral=True
+            )
+            return
+
+        # Generate reviewer using AI (non-thinking mode)
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You create concise reviewers."},
-                {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
+                {"role": "system", "content": "You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. PLease prevent using '-' or dash because ReportLab doesn't recognize the tag. If you are adding like one-direction make it one direction (just space)."},
+                {"role": "user", "content": f"Convert the following handout into a bullet-point reviewer:\n\n{pdf_text}. Do not add - or dash to your words"}
             ],
-            temperature=0,
+            temperature=0
+        )
+        print(response.choices[0].message.content)
+        reviewer_text = response.choices[0].message.content
+
+        # Generate formatted PDF
+        output_file = generate_formatted_pdf(reviewer_text, "**{file.name}** (REVIEWER).pdf")
+
+        # Send PDF to user
+        await interaction.followup.send(
+            content="📝 Your reviewer is ready! Download it below:",
+            file=discord.File(output_file),
+            ephemeral=True
         )
 
-        if response.choices and response.choices[0].message.content:
-            reviewer_text = response.choices[0].message.content
-            output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
-
-            await interaction.followup.send(
-                content="📝 Your reviewer is ready! Download it below:",
-                file=discord.File(output_file),
-                ephemeral=True
-            )
-
-            os.remove(file_path)
-            os.remove(output_file)
-        else:
-            await interaction.followup.send("❌ No response from the AI model.", ephemeral=True)
+        # Cleanup
+        os.remove(file_path)
+        os.remove(output_file)
 
     except Exception as e:
-        if "402" in str(e):
-            await interaction.followup.send("❌ You've hit the monthly credit limit. Please try again later.", ephemeral=True)
-        else:
-            await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
+        await interaction.followup.send(
+            f"❌ Error processing file: {str(e)}", ephemeral=True
+        )
 
 # ---------------- READY EVENT ----------------
 @bot.event
