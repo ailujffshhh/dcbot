@@ -35,31 +35,38 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     
 import re
 
+import re
+
 def clean_text(text: str) -> str:
     """
     Remove invisible control characters that may cause issues.
     """
     return re.sub(r'[\x00-\x1F\x7F]', '', text)
 
-def split_text(text: str, chunk_size: int = 1000, prefix_length: int = 0) -> list[str]:
+def split_text(text: str, chunk_size: int = 1000) -> list[str]:
     """
-    Split text into chunks while keeping format intact.
-    Each chunk is <= chunk_size characters.
+    Split text into chunks of up to 1000 characters
+    without breaking Markdown formatting (prefer newline/space).
     """
     text = clean_text(text)
     chunks = []
+    
     while text:
-        # Grab a chunk
-        chunk = text[:chunk_size - prefix_length]
+        # Take a base chunk
+        chunk = text[:chunk_size]
 
-        # Try not to cut in the middle of a word/line if possible
-        if len(text) > chunk_size - prefix_length:
-            # Find last safe break (newline or space)
-            last_break = max(chunk.rfind("\n"), chunk.rfind(" "))
+        if len(text) > chunk_size:
+            # Prefer breaking at newline
+            last_break = chunk.rfind("\n")
+            if last_break == -1:
+                # Fallback: break at space
+                last_break = chunk.rfind(" ")
             if last_break != -1:
                 chunk = chunk[:last_break]
 
         chunks.append(chunk)
-        text = text[len(chunk):]  # move to next chunk (no whitespace trimming)
+        text = text[len(chunk):]  # continue with the rest
+    
     return chunks
+
 
