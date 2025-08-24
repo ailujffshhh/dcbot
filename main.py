@@ -17,21 +17,26 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
 # ----- OpenAI (HuggingFace router) -----
-client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_KEY)
+client_ai = OpenAI(
+    base_url="https://router.huggingface.co/v1",
+    api_key=HF_API_KEY
+)
 
 # ----- Discord Bot -----
 intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ----- FastAPI (health check) -----
 app = FastAPI()
+
 @app.get("/")
 @app.head("/")
 async def root():
     return JSONResponse({"status": "Bot is running!"})
 
-# Optional: limit slash command sync to a guild for faster updates
+# Guild IDs (for faster command sync)
 GUILD_IDS = [1405134005359349760]
 
 # Dedup message IDs
@@ -51,24 +56,30 @@ async def on_message(message: discord.Message):
     if len(processed_messages) > 1000:
         processed_messages = set(list(processed_messages)[-500:])
 
-    # 1) Let the game own its channel(s)
+    # 1) Handle game channel
     handled = await handle_game_message(message, bot)
     if handled:
         return
 
-    # 2) Chatbot mention handler
+    # 2) Handle chatbot (mentions)
     handled = await handle_chatbot_message(message, bot, client_ai)
     if handled:
         return
 
-    # 3) Finally, allow commands
+    # 3) Allow normal bot commands
     await bot.process_commands(message)
 
 # ========== /review SLASH COMMAND ==========
-@bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
+@bot.tree.command(
+    name="review",
+    description="Upload a PDF handout to convert it into a reviewer"
+)
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message("⚠️ Please upload a valid PDF file.", ephemeral=True)
+        await interaction.response.send_message(
+            "⚠️ Please upload a valid PDF file.",
+            ephemeral=True
+        )
         return
 
     await interaction.response.send_message(
@@ -84,7 +95,10 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         # Extract text
         pdf_text = extract_pdf_text(file_path)
         if not pdf_text:
-            await interaction.followup.send("⚠️ Could not extract any text from the PDF.", ephemeral=True)
+            await interaction.followup.send(
+                "⚠️ Could not extract any text from the PDF.",
+                ephemeral=True
+            )
             return
 
         # Generate reviewer
@@ -93,16 +107,24 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             messages=[
                 {
                     "role": "system",
-                    "content": "You create concise bullet-point reviewers from study handouts. "
-                               "No reasoning or extra commentary. Do not use dashes '-'."
+                    "content": (
+                        "You create concise bullet-point reviewers from study handouts. "
+                        "No reasoning or extra commentary. Do not use dashes '-'."
+                    )
                 },
-                {"role": "user", "content": f"Convert this handout into a bullet-point reviewer:\n\n{pdf_text}"}
+                {
+                    "role": "user",
+                    "content": f"Convert this handout into a bullet-point reviewer:\n\n{pdf_text}"
+                }
             ],
             temperature=0
         )
 
         reviewer_text = response.choices[0].message.content
-        output_file = generate_formatted_pdf(reviewer_text, f"{file.filename} (REVIEWER).pdf")
+        output_file = generate_formatted_pdf(
+            reviewer_text,
+            f"{file.filename} (REVIEWER).pdf"
+        )
 
         await interaction.followup.send(
             content="📝 Your reviewer is ready! Download it below:",
@@ -114,13 +136,16 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         os.remove(output_file)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
+        await interaction.followup.send(
+            f"❌ Error processing file: {str(e)}",
+            ephemeral=True
+        )
 
 # ========== READY ==========
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
-    # Fast guild sync (optional)
+    # Fast guild sync
     for guild_id in GUILD_IDS:
         try:
             guild = discord.Object(id=guild_id)
@@ -130,14 +155,20 @@ async def on_ready():
         except Exception as e:
             print(f"⚠️ Failed to sync commands to guild {guild_id}: {e}")
 
+    # Start game tasks AFTER bot is ready
+    setup_game(bot)
+
 # ========== MAIN ==========
 if __name__ == "__main__":
     import uvicorn
 
     def run_fastapi():
-        uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", 8000))
+        )
 
     threading.Thread(target=run_fastapi, daemon=True).start()
 
-    setup_game(bot)  # start tasks/listeners owned by the game
     bot.run(DISCORD_TOKEN)
