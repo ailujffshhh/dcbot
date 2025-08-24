@@ -36,9 +36,9 @@ bot = commands.Bot(command_prefix=None, intents=intents)
 
 app = FastAPI()
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
-    return {"status": "Bot is running!"}
+    return JSONResponse({"status": "Bot is running!"})
 
 
 @bot.event
@@ -100,10 +100,13 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc.build(elements)
     return output_file
 
-@bot.tree.command(name="chat", description="Ask Doc Ron a question, get a response, be a member of SBAPN Gang.")
+@bot.tree.command(
+    name="chat",
+    description="Ask Doc Ron a question, get a response, and be a member of SBAPN Gang."
+)
 async def chat(interaction: discord.Interaction, prompt: str):
     await interaction.response.send_message(
-        "💬 Thinking...", ephemeral=True
+        "💬 Thinking..." 
     )
 
     try:
@@ -117,12 +120,13 @@ async def chat(interaction: discord.Interaction, prompt: str):
         )
 
         answer = response.choices[0].message.content
-        await interaction.followup.send(answer, ephemeral=True)
+        await interaction.followup.send(answer)  
 
     except Exception as e:
         await interaction.followup.send(
-            f"❌ Error generating response: {str(e)}", ephemeral=True
+            f"❌ Error generating response: {str(e)}"
         )
+
 
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
