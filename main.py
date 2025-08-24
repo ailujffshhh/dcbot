@@ -29,7 +29,9 @@ GUILD_IDS = [1405134005359349760]
 @bot.tree.command(name="chat", description="Ask Doc Ron a question")
 async def chat(interaction: discord.Interaction, prompt: str):
     user_mention = interaction.user.mention
-    await interaction.response.send_message(f"{user_mention} asked: {prompt}\nDr. Ron is thinking...")
+    
+    # Defer response immediately to avoid "Unknown interaction" error
+    await interaction.response.defer(thinking=True)
 
     try:
         response = client_ai.chat.completions.create(
@@ -49,6 +51,8 @@ async def chat(interaction: discord.Interaction, prompt: str):
             await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
         return
 
+    # Split and send in chunks
+    await interaction.followup.send(f"{user_mention} asked: {prompt}")
     for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
         await interaction.followup.send(f"{user_mention} {chunk}")
 
@@ -58,9 +62,8 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
         return
 
-    await interaction.response.send_message(
-        f"📄 Processing your file **{file.filename}** into a reviewer, please wait...", ephemeral=True
-    )
+    # Defer response immediately
+    await interaction.response.defer(thinking=True)
 
     try:
         file_path = f"./{file.filename}"
