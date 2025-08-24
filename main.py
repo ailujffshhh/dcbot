@@ -61,7 +61,7 @@ async def on_message(message: discord.Message):
             )
             answer = response.choices[0].message.content
 
-            await thinking_msg.edit(content=f"{user_mention} asked: {prompt}\n\n{user_mention} {answer}")
+            await thinking_msg.edit({user_mention} {answer}")
 
         except Exception as e:
             if "402" in str(e):
