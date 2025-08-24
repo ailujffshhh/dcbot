@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
 import asyncio
+from game import setup_game
 
 # Load environment variables
 load_dotenv()
@@ -178,6 +179,7 @@ if __name__ == "__main__":
     
     fastapi_thread = threading.Thread(target=run_fastapi, daemon=True)
     fastapi_thread.start()
-    
+
+    setup_game(bot)
     # Run the Discord bot
     bot.run(DISCORD_TOKEN)
