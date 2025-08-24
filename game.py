@@ -97,7 +97,7 @@ def setup_game(bot: commands.Bot):
 
     # Start the daily reset loop
     if not reset_game.is_running():
-        reset_game.start(bot)
+        reset_game.start()
 
     # Optional: pick a word immediately on startup (no announcement)
     if current_word is None:
