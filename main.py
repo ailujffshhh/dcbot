@@ -105,9 +105,7 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     description="Ask Doc Ron a question, get a response, and be a member of SBAPN Gang."
 )
 async def chat(interaction: discord.Interaction, prompt: str):
-    await interaction.response.send_message(
-        "Dr. Ron is thinking..." 
-    )
+    await interaction.response.send_message("Dr. Ron is thinking...")
 
     try:
         response = client_ai.chat.completions.create(
@@ -120,12 +118,18 @@ async def chat(interaction: discord.Interaction, prompt: str):
         )
 
         answer = response.choices[0].message.content
-        await interaction.followup.send(answer)  
+        await interaction.followup.send(answer)
 
     except Exception as e:
-        await interaction.followup.send(
-            f"❌ Error generating response: {str(e)}"
-        )
+        await interaction.followup.send(f"Error generating response: {str(e)}")
+
+
+async def setup_commands():
+    await bot.wait_until_ready()
+    await bot.tree.sync()  
+
+bot.loop.create_task(setup_commands())
+
 
 
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
