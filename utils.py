@@ -1,12 +1,22 @@
 import re
+import os
+import json
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 import PyPDF2
-import os
 
-def extract_pdf_text(file_path):
+CONVERSATION_FILE = "conversations.json"
+
+def clean_text(text: str) -> str:
+    return re.sub(r"[\x00-\x1F\x7F]", "", text)
+
+def split_text(text: str, max_len: int = 2000):
+    text = clean_text(text)
+    return [text[i:i+max_len] for i in range(0, len(text), max_len)]
+
+def extract_pdf_text(file_path: str) -> str:
     text = ""
     with open(file_path, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -16,26 +26,14 @@ def extract_pdf_text(file_path):
                 text += page_text + " "
     return text.strip()
 
-def generate_formatted_pdf(text, output_file="reviewer.pdf"):
+def generate_formatted_pdf(text: str, output_file="reviewer.pdf"):
     doc = SimpleDocTemplate(output_file, pagesize=letter)
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "Title",
-        parent=styles["Heading1"],
-        fontSize=18,
-        spaceAfter=20,
-        alignment=1,
-        textColor=colors.HexColor("#2E4053")
-    )
-    body_style = ParagraphStyle(
-        "Body",
-        parent=styles["Normal"],
-        fontSize=12,
-        leading=16,
-        textColor=colors.black
-    )
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=18, spaceAfter=20, alignment=1, textColor=colors.HexColor("#2E4053"))
+    body_style = ParagraphStyle("Body", parent=styles["Normal"], fontSize=12, leading=16, textColor=colors.black)
+
     elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
-    sections = text.split('\n\n')
+    sections = text.split("\n---\n")
     for i, sec in enumerate(sections):
         for paragraph in sec.strip().split("\n"):
             paragraph = paragraph.strip()
@@ -48,18 +46,12 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc.build(elements)
     return output_file
 
-def clean_text(text: str) -> str:
-    return re.sub(r'[\x00-\x1F\x7F]', '', text)
+def save_conversations(conversations: dict):
+    with open(CONVERSATION_FILE, "w", encoding="utf-8") as f:
+        json.dump(conversations, f, ensure_ascii=False, indent=2)
 
-def split_text(text: str, max_len: int = 2000):
-    text = clean_text(text)
-    chunks = []
-    while len(text) > max_len:
-        split_at = text.rfind('\n', 0, max_len)
-        if split_at == -1:
-            split_at = max_len
-        chunks.append(text[:split_at].strip())
-        text = text[split_at:].strip()
-    if text:
-        chunks.append(text)
-    return chunks
+def load_conversations() -> dict:
+    if os.path.exists(CONVERSATION_FILE):
+        with open(CONVERSATION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
