@@ -178,7 +178,7 @@ async def before_reset_word():
     await discord.Client.wait_until_ready
 
 
-# --- AUTO DELETE USER MESSAGES ---
+# --- AUTO DELETE USER MESSAGES + DM ---
 async def on_message(message):
     if message.author.bot:
         return
@@ -190,6 +190,22 @@ async def on_message(message):
             print("⚠️ Missing permissions to delete messages in game channel.")
         except discord.NotFound:
             pass
+
+        # DM the tutorial video + text
+        try:
+            dm_channel = await message.author.create_dm()
+            await dm_channel.send(
+                "Hey Mr, Don't be a SBAPN.\n" 
+                "Please don’t type directly in the game channel!\n"
+                "Use the **🎮 Try to Guess** button instead.\n\n"
+                
+            )
+            # send a hosted video link (replace with your actual video link)
+            await dm_channel.send(
+                content="https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov?ex=68ac2d77&is=68aadbf7&hm=260b976ab612cac87fb77264afddffd87f34c48301696e81651d1921f4c12ec7&"
+            )
+        except discord.Forbidden:
+            print(f"⚠️ Cannot DM {message.author}, DMs are closed.")
 
     await bot.process_commands(message)
 
