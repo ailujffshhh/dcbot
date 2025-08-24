@@ -14,12 +14,14 @@ pinned_message = None
 
 # --- WORD GENERATOR ---
 def get_new_word():
-    words = ["crane", "blast", "pride", "chalk", "mount",
-             "frost", "shine", "plumb", "grace", "stone",
-             "brisk", "cloud", "vivid", "trace", "march",
-             "glory", "water", "zebra", "night", "crown",
-             "dream", "light", "flare", "sword", "magic",
-             "quiet", "blaze", "river", "storm", "noble"]
+    words = [
+        "crane", "blast", "pride", "chalk", "mount",
+        "frost", "shine", "plumb", "grace", "stone",
+        "brisk", "cloud", "vivid", "trace", "march",
+        "glory", "water", "zebra", "night", "crown",
+        "dream", "light", "flare", "sword", "magic",
+        "quiet", "blaze", "river", "storm", "noble"
+    ]
     return random.choice(words)
 
 
@@ -165,7 +167,7 @@ async def reset_word(bot: commands.Bot):
         title="📌 [GUESS THE 5 LETTER WORD]",
         description=(
             "**Instructions:**\n"
-            "Press ** Try to Guess** to submit your guess.\n\n"
+            "Press **🎮 Try to Guess** to submit your guess.\n\n"
             "**Color coding:**\n"
             "🟩 = Correct letter in the correct position\n"
             "⬛ = Correct letter but wrong position\n"
@@ -184,11 +186,11 @@ async def reset_word(bot: commands.Bot):
 
 @reset_word.before_loop
 async def before_reset_word():
-    await discord.Client.wait_until_ready
+    await discord.Client.wait_until_ready()
 
 
 # --- AUTO DELETE USER MESSAGES + DM ---
-async def on_message(message):
+async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
@@ -204,19 +206,18 @@ async def on_message(message):
         try:
             dm_channel = await message.author.create_dm()
             await dm_channel.send(
-                "Hey Mr, Don't be a SBAPN.\n" 
+                "Hey Mr, Don't be a SBAPN.\n"
                 "Please don’t type directly in the game channel!\n"
                 "Use the **🎮 Try to Guess** button instead.\n\n"
-                
             )
-            # send a hosted video link (replace with your actual video link)
             await dm_channel.send(
-                content="https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov?ex=68ac2d77&is=68aadbf7&hm=260b976ab612cac87fb77264afddffd87f34c48301696e81651d1921f4c12ec7&"
+                content="https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov"
             )
         except discord.Forbidden:
             print(f"⚠️ Cannot DM {message.author}, DMs are closed.")
 
-    await bot.process_commands(message)
+    # ✅ use message.client instead of bot
+    await message.client.process_commands(message)
 
 
 # --- SETUP FUNCTION ---
