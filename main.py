@@ -20,10 +20,7 @@ HF_API_KEY = os.getenv("HF_API_KEY")
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN is not set!")
 
-client_ai = OpenAI(
-    base_url="https://router.huggingface.co/v1",
-    api_key=HF_API_KEY,
-)
+client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_KEY)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -85,73 +82,79 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     return output_file
 
 GUILD_IDS = [1405134005359349760]
-guild_objects = [discord.Object(id=guild_id) for guild_id in GUILD_IDS]
+
+def split_message(text, limit=2000):
+    chunks = []
+    while len(text) > limit:
+        split_at = text.rfind("\n", 0, limit)
+        if split_at == -1:
+            split_at = limit
+        chunks.append(text[:split_at])
+        text = text[split_at:]
+    if text:
+        chunks.append(text)
+    return chunks
+
+for guild_id in GUILD_IDS:
+    guild = discord.Object(id=guild_id)
+
+    @bot.tree.command(name="chat", description="Ask Doc Ron a question", guild=guild)
+    async def chat(interaction: discord.Interaction, prompt: str):
+        await interaction.response.send_message(f"{interaction.user.mention} asked: {prompt}\nDr. Ron is thinking...")
+        try:
+            response = client_ai.chat.completions.create(
+                model="openai/gpt-oss-120b:fireworks-ai",
+                messages=[
+                    {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor who answers questions clearly and concisely."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+            answer = response.choices[0].message.content
+            for chunk in split_message(answer):
+                await interaction.followup.send(f"{interaction.user.mention}, {chunk}")
+        except Exception as e:
+            await interaction.followup.send(f"{interaction.user.mention} ❌ Error: {str(e)}")
+
+    @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer", guild=guild)
+    async def review(interaction: discord.Interaction, file: discord.Attachment):
+        if not file.filename.lower().endswith(".pdf"):
+            await interaction.response.send_message("⚠️ Please upload a valid PDF file.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"📄 Processing {file.filename} into a reviewer...", ephemeral=True)
+        try:
+            file_path = f"./{file.filename}"
+            await file.save(file_path)
+            pdf_text = extract_pdf_text(file_path)
+            if not pdf_text:
+                await interaction.followup.send("⚠️ Could not extract text from the PDF.", ephemeral=True)
+                return
+            response = client_ai.chat.completions.create(
+                model="openai/gpt-oss-120b:fireworks-ai",
+                messages=[
+                    {"role": "system", "content": "Your name is Doc Ron. You create concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary."},
+                    {"role": "user", "content": f"Convert the following handout into a bullet-point reviewer:\n\n{pdf_text}"}
+                ],
+                temperature=0
+            )
+            reviewer_text = response.choices[0].message.content
+            output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
+            await interaction.followup.send(content="📝 Your reviewer is ready! Download it below:", file=discord.File(output_file), ephemeral=True)
+            os.remove(file_path)
+            os.remove(output_file)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
 @bot.event
 async def on_ready():
-    for guild in guild_objects:
-        await bot.tree.sync(guild=guild)
+    for guild_id in GUILD_IDS:
+        await bot.tree.sync(guild=discord.Object(id=guild_id))
     print(f"✅ Logged in as {bot.user}. Commands synced for guilds: {GUILD_IDS}")
-
-@bot.tree.command(
-    name="chat",
-    description="Ask Doc Ron a question"
-)
-async def chat(interaction: discord.Interaction, prompt: str):
-    await interaction.response.send_message(f"{interaction.user.mention} asked: {prompt}\nDr. Ron is thinking...")
-    try:
-        response = client_ai.chat.completions.create(
-            model="openai/gpt-oss-120b:fireworks-ai",
-            messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor who answers questions clearly and concisely. Make all your responses to filipino/tagalog, but not that deep, just a like a casual filipino speaker."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-        answer = response.choices[0].message.content
-        await interaction.followup.send(answer)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error: {str(e)}")
-
-@bot.tree.command(
-    name="review",
-    description="Upload a PDF handout to convert it into a reviewer"
-)
-async def review(interaction: discord.Interaction, file: discord.Attachment):
-    if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message("⚠️ Please upload a valid PDF file.", ephemeral=True)
-        return
-    await interaction.response.send_message(f"📄 Processing your file **{file.filename}**...", ephemeral=True)
-    try:
-        file_path = f"./{file.filename}"
-        await file.save(file_path)
-        pdf_text = extract_pdf_text(file_path)
-        if not pdf_text:
-            await interaction.followup.send("⚠️ Could not extract any text from the PDF.", ephemeral=True)
-            return
-        response = client_ai.chat.completions.create(
-            model="openai/gpt-oss-120b:fireworks-ai",
-            messages=[
-                {"role": "system", "content": "Your name is Doc Ron, You create concise, easy-to-read reviewers. Do NOT include reasoning or extra commentary. Avoid using '-'."},
-                {"role": "user", "content": f"Convert the following handout into a bullet-point reviewer:\n\n{pdf_text}"}
-            ],
-            temperature=0
-        )
-        reviewer_text = response.choices[0].message.content
-        output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
-        await interaction.followup.send(
-            content="📝 Your reviewer is ready! Download it below:",
-            file=discord.File(output_file),
-            ephemeral=True
-        )
-        os.remove(file_path)
-        os.remove(output_file)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
 if __name__ == "__main__":
     def start_webserver():
         import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-    threading.Thread(target=start_webserver, daemon=True).start()
+    web_thread = threading.Thread(target=start_webserver, daemon=True)
+    web_thread.start()
     bot.run(DISCORD_TOKEN)
