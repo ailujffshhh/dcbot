@@ -32,33 +32,42 @@ async def root():
 # Guild where slash commands will sync
 GUILD_IDS = [1405134005359349760]
 
-# ---------------- CHAT COMMAND ----------------
-@bot.tree.command(name="chat", description="Ask Doc Ron a question")
-async def chat(interaction: discord.Interaction, prompt: str):
-    user_mention = interaction.user.mention
-    
-    # Always defer first
-    await interaction.response.defer(thinking=True)
+# ---------------- MENTION CHAT ----------------
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return  # ignore other bots
 
-    try:
-        response = client_ai.chat.completions.create(
-            model="openai/gpt-oss-20b:fireworks-ai",
-            messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style. Limit your responses with 1 sentence only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-        )
-        answer = response.choices[0].message.content
+    # Check if bot is mentioned
+    if bot.user.mentioned_in(message):
+        user_mention = message.author.mention
+        prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
 
-        # Send both question and answer directly
-        await interaction.followup.send(f"{user_mention} asked: {prompt}\n\n{user_mention} {answer}")
+        if not prompt:
+            await message.reply(" Hi! Mention me with a question like: `@Dr. Ron what is photosynthesis?`")
+            return
 
-    except Exception as e:
-        if "402" in str(e):
-            await interaction.followup.send(f"{user_mention} ❌ You’ve hit the **monthly credit limit**. Please try again later.")
-        else:
-            await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
+        thinking_msg = await message.reply(" Doc Ron is thinking...")
+
+        try:
+            response = client_ai.chat.completions.create(
+                model="openai/gpt-oss-120b:fireworks-ai",
+                messages=[
+                    {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style. Limit your responses with 1 sentence only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200
+            )
+            answer = response.choices[0].message.content
+
+            await thinking_msg.edit(content=f"{user_mention} asked: {prompt}\n\n{user_mention} {answer}")
+
+        except Exception as e:
+            if "402" in str(e):
+                await thinking_msg.edit(content=f"{user_mention} ❌ You’ve hit the **monthly credit limit**. Please try again later.")
+            else:
+                await thinking_msg.edit(content=f"{user_mention} ❌ Error: {str(e)}")
 
 # ---------------- REVIEW COMMAND ----------------
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
@@ -67,7 +76,6 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
         return
 
-    # Always defer first
     await interaction.response.defer(thinking=True)
 
     try:
@@ -82,7 +90,7 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
                 {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
             ],
             temperature=0,
-            max_tokens=800   # <-- control length of reviewer
+            max_tokens=800
         )
         reviewer_text = response.choices[0].message.content
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
