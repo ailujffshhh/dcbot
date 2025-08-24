@@ -153,7 +153,7 @@ async def reset_word(bot: commands.Bot):
 
     view = GuessView()
     embed = discord.Embed(
-        title="📌 [GUESS THE WORD]",
+        title="📌 [GUESS THE 5 LETTER WORD]",
         description=(
             "**Instructions:**\n"
             "Press **🎮 Try to Guess** to submit your guess.\n\n"
@@ -194,7 +194,7 @@ def setup_game(bot: commands.Bot):
             await game_channel.purge(limit=100, check=lambda m: not m.pinned)
             view = GuessView()
             embed = discord.Embed(
-                title="📌 [GUESS THE WORD]",
+                title="📌 [GUESS THE 5 LETTER WORD]",
                 description=(
                     "**Instructions:**\n"
                     "Press **🎮 Try to Guess** to submit your guess.\n\n"
