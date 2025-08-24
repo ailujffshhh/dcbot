@@ -6,4 +6,3 @@ reportlab
 fastapi
 uvicorn
 pycryptodome
-jsonresponse
