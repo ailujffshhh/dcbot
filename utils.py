@@ -48,19 +48,27 @@ def clean_text(text: str) -> str:
     return cleaned
 
 
-def split_text(text: str, max_length: int = 2000) -> list[str]:
+def split_text(text: str, max_length: int = 2000, prefix_length: int = 0) -> list[str]:
     """
-    Split text into chunks that fit within Discord's 2000-character limit.
+    Splits text into chunks that fit within Discord's 2000 character limit,
+    accounting for an optional prefix (e.g., a user mention).
+    
+    :param text: The full text to split
+    :param max_length: Max length per Discord message (default 2000)
+    :param prefix_length: Extra characters reserved for a prefix
+    :return: A list of message-safe chunks
     """
     if not text:
         return []
 
+    available_length = max_length - prefix_length
     chunks = []
-    while len(text) > max_length:
-        # Find last newline within limit
-        split_at = text.rfind("\n", 0, max_length)
-        if split_at == -1:  # No newline found, hard cut
-            split_at = max_length
+
+    while len(text) > available_length:
+        # Try to split on a newline before cutting
+        split_at = text.rfind("\n", 0, available_length)
+        if split_at == -1:
+            split_at = available_length  # fallback: hard cut
 
         chunks.append(text[:split_at])
         text = text[split_at:].lstrip()
