@@ -32,7 +32,7 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
         elements.append(Spacer(1, 8))
     doc.build(elements)
     return output_file
-
+    
 import re
 
 def clean_text(text: str) -> str:
