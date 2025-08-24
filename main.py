@@ -6,7 +6,7 @@ from openai import OpenAI
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
-from utils import extract_pdf_text, generate_formatted_pdf, split_text, clean_text, save_conversations, load_conversations, reset_conversation
+from utils import extract_pdf_text, generate_formatted_pdf, split_text
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -16,7 +16,6 @@ client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_K
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=None, intents=intents)
-
 app = FastAPI()
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -27,42 +26,29 @@ GUILD_IDS = [1405134005359349760]
 
 @bot.tree.command(name="chat", description="Ask Doc Ron a question")
 async def chat(interaction: discord.Interaction, prompt: str):
-    user_id = str(interaction.user.id)
-    await interaction.response.send_message(f"{interaction.user.mention} asked: {prompt}\nDr. Ron is thinking...")
-    
-    conversations = load_conversations()
-    if user_id not in conversations:
-        conversations[user_id] = []
-    
-    conversations[user_id].append({"role": "user", "content": prompt})
-    
+    user_mention = interaction.user.mention
+    await interaction.response.send_message(f"{user_mention} asked: {prompt}\nDr. Ron is thinking...")
     try:
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
-            messages=[{"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor."}] + conversations[user_id],
+            messages=[
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Make your responses a casual Filipino style."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.7
         )
-        answer = clean_text(response.choices[0].message.content)
-        conversations[user_id].append({"role": "assistant", "content": answer})
-        save_conversations(conversations)
-        
-        for chunk in split_text(answer):
-            await interaction.followup.send(f"{interaction.user.mention} {chunk}")
-    
+        answer = response.choices[0].message.content
+        for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
+            await interaction.followup.send(f"{user_mention} {chunk}")
     except Exception as e:
-        error_str = str(e)
-        if "402" in error_str or "exceeded your monthly" in error_str:
-            reset_conversation(user_id)
-            await interaction.followup.send(f"{interaction.user.mention}  Monthly limit reached. Starting a new conversation. Please try again.")
-        else:
-            await interaction.followup.send(f"{interaction.user.mention}  Error: {error_str}")
+        await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
 
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message(" Please upload a valid PDF.", ephemeral=True)
+        await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
         return
-    await interaction.response.send_message(f" Processing your file **{file.filename}**...", ephemeral=True)
+    await interaction.response.send_message(f"📄 Processing your file **{file.filename}** into a reviewer, please wait...", ephemeral=True)
     try:
         file_path = f"./{file.filename}"
         await file.save(file_path)
@@ -75,13 +61,13 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             ],
             temperature=0
         )
-        reviewer_text = clean_text(response.choices[0].message.content)
+        reviewer_text = response.choices[0].message.content
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
-        await interaction.followup.send(content=" Your reviewer is ready!", file=discord.File(output_file), ephemeral=True)
+        await interaction.followup.send(content="📝 Your reviewer is ready! Download it below:", file=discord.File(output_file), ephemeral=True)
         os.remove(file_path)
         os.remove(output_file)
     except Exception as e:
-        await interaction.followup.send(f" Error processing file: {str(e)}", ephemeral=True)
+        await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
 @bot.event
 async def on_ready():
