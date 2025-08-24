@@ -27,12 +27,12 @@ GUILD_IDS = [1405134005359349760]
 
 @bot.tree.command(name="chat", description="Ask Doc Ron a question")
 async def chat(interaction: discord.Interaction, prompt: str):
-    await interaction.response.send_message(f"💬 {interaction.user.mention} asked: {prompt}\nDr. Ron is thinking...")
+    await interaction.response.send_message(f"{interaction.user.mention} asked: {prompt}\nDr. Ron is thinking...")
     try:
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor."},
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Make your responses a tagalog, but not deep tagalog, just like a casual filipino citizen."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
