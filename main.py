@@ -33,7 +33,7 @@ async def chat(interaction: discord.Interaction, prompt: str):
 
     try:
         response = client_ai.chat.completions.create(
-            model="openai/gpt-oss-120b:fireworks-ai",
+            model="openai/gpt-oss-20b:fireworks-ai",
             messages=[
                 {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style."},
                 {"role": "user", "content": prompt}
