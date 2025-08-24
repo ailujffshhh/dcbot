@@ -96,6 +96,7 @@ for guild_id in GUILD_IDS:
         guild=guild
     )
     async def chat(interaction: discord.Interaction, prompt: str):
+         print(f"{interaction.user} typed: {prompt}")
         await interaction.response.send_message("Dr. Ron is thinking...")
         try:
             response = client_ai.chat.completions.create(
