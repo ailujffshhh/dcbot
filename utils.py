@@ -10,12 +10,26 @@ import PyPDF2
 CONVERSATION_FILE = "conversations.json"
 
 def clean_text(text: str) -> str:
+    # Remove invisible/control characters
     text = re.sub(r"[\x00-\x1F\x7F]", "", text)
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-def split_text(text: str, limit=2000):
+def split_text(text: str, prefix_length: int = 0, limit: int = 2000):
+    """
+    Split text into chunks <= limit, accounting for prefix_length (like mentions)
+    """
     text = clean_text(text)
-    return [text[i:i+limit] for i in range(0, len(text), limit)]
+    max_len = limit - prefix_length
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + max_len
+        chunks.append(text[start:end])
+        start = end
+    return chunks
+
 
 def extract_pdf_text(file_path: str) -> str:
     text = ""
