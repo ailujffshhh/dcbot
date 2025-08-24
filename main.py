@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
-from game import setup_game, handle_game_message
+from game import setup_game
 
 # Load environment variables
 load_dotenv()
