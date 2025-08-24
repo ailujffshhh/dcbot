@@ -55,7 +55,7 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
 
             # Private confirmation
             await interaction.response.send_message(
-                f"✅ Correct! The word was **{current_word}** 🎉\n"
+                f"✅ Correct! The word was **{current_word.upper()}** 🎉\n"
                 f"{feedback}\n\n"
                 f"Stats: {leaderstats[user_id]['correct']} correct / {leaderstats[user_id]['tries']} tries",
                 ephemeral=True
@@ -63,7 +63,7 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
 
             # Public announcement
             await game_channel.send(
-                f"🎉 <@{user_id}> guessed the word correctly! The word was **{current_word}** "
+                f"🎉 <@{user_id}> guessed the word correctly! The word was **{current_word.upper()}** "
                 f"with {leaderstats[user_id]['tries']} tries."
             )
         else:
@@ -80,9 +80,28 @@ class GuessView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Try to Guess", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🎮 Try to Guess", style=discord.ButtonStyle.primary)
     async def guess_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(GuessModal())
+
+    @discord.ui.button(label="📊 Leaderboard", style=discord.ButtonStyle.secondary)
+    async def leaderboard_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not leaderstats:
+            await interaction.response.send_message("📊 No guesses yet!", ephemeral=True)
+            return
+
+        sorted_stats = sorted(leaderstats.items(), key=lambda x: x[1]["correct"], reverse=True)
+        leaderboard_text = "\n".join(
+            [f"<@{user}> — ✅ {stats['correct']} correct / 🎯 {stats['tries']} tries"
+             for user, stats in sorted_stats[:10]]
+        )
+
+        embed = discord.Embed(
+            title="🏆 Leaderboard",
+            description=leaderboard_text,
+            color=discord.Color.gold()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # --- DAILY RESET ---
@@ -104,7 +123,22 @@ async def reset_word(bot: commands.Bot):
             pass
 
     view = GuessView()
-    pinned_message = await game_channel.send("📌 **[GUESS THE WORD]**\nClick below to try your guess!", view=view)
+    embed = discord.Embed(
+        title="📌 [GUESS THE WORD]",
+        description=(
+            "**Instructions:**\n"
+            "Press **🎮 Try to Guess** to submit your guess.\n\n"
+            "**Color coding:**\n"
+            "🟩 = Correct letter in the correct position\n"
+            "⬛ = Correct letter but wrong position\n"
+            "🟥 = Letter not in the word\n\n"
+            "✅ Correct guesses will be announced in this channel.\n"
+            "❌ Wrong guesses remain private (only you can see)."
+        ),
+        color=discord.Color.blue()
+    )
+
+    pinned_message = await game_channel.send(embed=embed, view=view)
     await pinned_message.pin()
 
     print(f"[RESET] New word is: {current_word}")
@@ -115,33 +149,8 @@ async def before_reset_word():
     await discord.Client.wait_until_ready
 
 
-# --- LEADERBOARD COMMAND ---
-async def leaderboard(interaction: discord.Interaction):
-    if not leaderstats:
-        await interaction.response.send_message("No guesses yet!", ephemeral=True)
-        return
-
-    sorted_stats = sorted(leaderstats.items(), key=lambda x: x[1]["correct"], reverse=True)
-    leaderboard_text = "\n".join(
-        [f"<@{user}> — {stats['correct']} correct / {stats['tries']} tries"
-         for user, stats in sorted_stats[:10]]
-    )
-
-    embed = discord.Embed(
-        title="🏆 Leaderboard",
-        description=leaderboard_text,
-        color=discord.Color.gold()
-    )
-    await interaction.response.send_message(embed=embed, ephemeral=False)
-
-
 # --- SETUP FUNCTION ---
 def setup_game(bot: commands.Bot):
-    # Register leaderboard command
-    @bot.tree.command(name="leaderboard", description="Show top guessers")
-    async def _leaderboard(interaction: discord.Interaction):
-        await leaderboard(interaction)
-
     # Start reset loop
     @bot.event
     async def on_ready():
@@ -156,7 +165,22 @@ def setup_game(bot: commands.Bot):
 
             await game_channel.purge(limit=100, check=lambda m: not m.pinned)
             view = GuessView()
-            pinned_message = await game_channel.send("📌 **[GUESS THE WORD]**\nClick below to try your guess!", view=view)
+            embed = discord.Embed(
+                title="📌 [GUESS THE WORD]",
+                description=(
+                    "**Instructions:**\n"
+                    "Press **🎮 Try to Guess** to submit your guess.\n\n"
+                    "**Color coding:**\n"
+                    "🟩 = Correct letter in the correct position\n"
+                    "⬛ = Correct letter but wrong position\n"
+                    "🟥 = Letter not in the word\n\n"
+                    "✅ Correct guesses will be announced in this channel.\n"
+                    "❌ Wrong guesses remain private (only you can see)."
+                ),
+                color=discord.Color.blue()
+            )
+
+            pinned_message = await game_channel.send(embed=embed, view=view)
             await pinned_message.pin()
 
             print(f"✅ Game ready, word is: {current_word}")
