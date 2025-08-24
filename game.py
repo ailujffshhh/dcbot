@@ -51,6 +51,15 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
         user_id = interaction.user.id
         game_channel = interaction.client.get_channel(GAME_CHANNEL_ID)
 
+        # --- Prevent re-guessing if already correct ---
+        if current_word in word_leaderboards and user_id in word_leaderboards[current_word]:
+            await interaction.response.send_message(
+                f"⚠️ You’ve already guessed **{current_word.upper()}** correctly. "
+                f"Wait for the next word reset! 🎉",
+                ephemeral=True
+            )
+            return
+
         if user_id not in leaderstats:
             leaderstats[user_id] = {"correct": 0, "tries": 0}
 
