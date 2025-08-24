@@ -39,34 +39,34 @@ import re
 
 def clean_text(text: str) -> str:
     """
-    Remove invisible control characters that may cause issues.
+    Clean up text by stripping whitespace and removing extra newlines.
     """
-    return re.sub(r'[\x00-\x1F\x7F]', '', text)
+    if not text:
+        return ""
+    # Remove leading/trailing whitespace and collapse multiple newlines
+    cleaned = re.sub(r'\n+', '\n', text.strip())
+    return cleaned
 
-def split_text(text: str, chunk_size: int = 1000) -> list[str]:
+
+def split_text(text: str, max_length: int = 2000) -> list[str]:
     """
-    Split text into chunks of up to 1000 characters
-    without breaking Markdown formatting (prefer newline/space).
+    Split text into chunks that fit within Discord's 2000-character limit.
     """
-    text = clean_text(text)
+    if not text:
+        return []
+
     chunks = []
-    
-    while text:
-        # Take a base chunk
-        chunk = text[:chunk_size]
+    while len(text) > max_length:
+        # Find last newline within limit
+        split_at = text.rfind("\n", 0, max_length)
+        if split_at == -1:  # No newline found, hard cut
+            split_at = max_length
 
-        if len(text) > chunk_size:
-            # Prefer breaking at newline
-            last_break = chunk.rfind("\n")
-            if last_break == -1:
-                # Fallback: break at space
-                last_break = chunk.rfind(" ")
-            if last_break != -1:
-                chunk = chunk[:last_break]
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip()
 
-        chunks.append(chunk)
-        text = text[len(chunk):]  # continue with the rest
-    
+    if text:
+        chunks.append(text)
+
     return chunks
-
 
