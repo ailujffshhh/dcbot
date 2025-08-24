@@ -14,7 +14,7 @@ pinned_message = None
 
 _task_bot: commands.Bot | None = None  # for before_loop waiting
 
-# ---- WORD PICKER ----
+
 def choose_new_word():
     global current_word, previous_word
     previous_word = current_word
