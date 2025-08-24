@@ -3,7 +3,7 @@ import discord
 from discord.ext import tasks, commands
 
 # Your game channel ID (replace with your actual channel)
-GAME_CHANNEL_ID = 1409097497112088627  
+GAME_CHANNEL_ID = 1409106619689599077  
 
 leaderstats = {}  # {user_id: {"correct": int, "tries": int}}
 word_leaderboards = {}  # {word: [user_id, ...]} for per-word winners
@@ -156,7 +156,7 @@ async def reset_word(bot: commands.Bot):
         title="📌 [GUESS THE 5 LETTER WORD]",
         description=(
             "**Instructions:**\n"
-            "Press **🎮 Try to Guess** to submit your guess.\n\n"
+            "Press ** Try to Guess** to submit your guess.\n\n"
             "**Color coding:**\n"
             "🟩 = Correct letter in the correct position\n"
             "⬛ = Correct letter but wrong position\n"
