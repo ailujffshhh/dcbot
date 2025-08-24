@@ -10,11 +10,12 @@ import PyPDF2
 CONVERSATION_FILE = "conversations.json"
 
 def clean_text(text: str) -> str:
-    return re.sub(r"[\x00-\x1F\x7F]", "", text)
+    text = re.sub(r"[\x00-\x1F\x7F]", "", text)
+    return text.strip()
 
-def split_text(text: str, max_len: int = 2000):
+def split_text(text: str, limit=2000):
     text = clean_text(text)
-    return [text[i:i+max_len] for i in range(0, len(text), max_len)]
+    return [text[i:i+limit] for i in range(0, len(text), limit)]
 
 def extract_pdf_text(file_path: str) -> str:
     text = ""
@@ -26,32 +27,34 @@ def extract_pdf_text(file_path: str) -> str:
                 text += page_text + " "
     return text.strip()
 
-def generate_formatted_pdf(text: str, output_file="reviewer.pdf"):
+def generate_formatted_pdf(text: str, output_file="reviewer.pdf") -> str:
     doc = SimpleDocTemplate(output_file, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=18, spaceAfter=20, alignment=1, textColor=colors.HexColor("#2E4053"))
     body_style = ParagraphStyle("Body", parent=styles["Normal"], fontSize=12, leading=16, textColor=colors.black)
-
     elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
-    sections = text.split("\n---\n")
-    for i, sec in enumerate(sections):
+    sections = text.split("\n\n")
+    for sec in sections:
         for paragraph in sec.strip().split("\n"):
-            paragraph = paragraph.strip()
-            if paragraph:
-                elements.append(Paragraph(paragraph, body_style))
+            if paragraph.strip():
+                elements.append(Paragraph(paragraph.strip(), body_style))
                 elements.append(Spacer(1, 4))
-        if i < len(sections) - 1:
-            elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
-            elements.append(Spacer(1, 8))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
+        elements.append(Spacer(1, 8))
     doc.build(elements)
     return output_file
-
-def save_conversations(conversations: dict):
-    with open(CONVERSATION_FILE, "w", encoding="utf-8") as f:
-        json.dump(conversations, f, ensure_ascii=False, indent=2)
 
 def load_conversations() -> dict:
     if os.path.exists(CONVERSATION_FILE):
         with open(CONVERSATION_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
+
+def save_conversations(conversations: dict):
+    with open(CONVERSATION_FILE, "w", encoding="utf-8") as f:
+        json.dump(conversations, f, ensure_ascii=False, indent=2)
+
+def reset_conversation(user_id: str):
+    conversations = load_conversations()
+    conversations[user_id] = []
+    save_conversations(conversations)
