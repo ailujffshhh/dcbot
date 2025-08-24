@@ -6,13 +6,20 @@ from discord.ext import tasks, commands
 GAME_CHANNEL_ID = 1409097497112088627  
 
 leaderstats = {}  # {user_id: {"correct": int, "tries": int}}
+word_leaderboards = {}  # {word: [user_id, ...]} for per-word winners
 current_word = None
+previous_word = None
 pinned_message = None
 
 
 # --- WORD GENERATOR ---
 def get_new_word():
-    words = ["python", "discord", "banana", "gaming", "leaderboard", "ephemeral", "openai"]
+    words = ["crane", "blast", "pride", "chalk", "mount",
+             "frost", "shine", "plumb", "grace", "stone",
+             "brisk", "cloud", "vivid", "trace", "march",
+             "glory", "water", "zebra", "night", "crown",
+             "dream", "light", "flare", "sword", "magic",
+             "quiet", "blaze", "river", "storm", "noble"]
     return random.choice(words)
 
 
@@ -53,6 +60,12 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
         if self.guess.value.lower() == current_word.lower():
             leaderstats[user_id]["correct"] += 1
 
+            # Record in per-word leaderboard
+            if current_word not in word_leaderboards:
+                word_leaderboards[current_word] = []
+            if user_id not in word_leaderboards[current_word]:
+                word_leaderboards[current_word].append(user_id)
+
             # Private confirmation
             await interaction.response.send_message(
                 f"✅ Correct! The word was **{current_word.upper()}** 🎉\n"
@@ -84,7 +97,7 @@ class GuessView(discord.ui.View):
     async def guess_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(GuessModal())
 
-    @discord.ui.button(label="📊 Leaderboard", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="📊 Global Leaderboard", style=discord.ButtonStyle.secondary)
     async def leaderboard_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not leaderstats:
             await interaction.response.send_message("📊 No guesses yet!", ephemeral=True)
@@ -92,12 +105,12 @@ class GuessView(discord.ui.View):
 
         sorted_stats = sorted(leaderstats.items(), key=lambda x: x[1]["correct"], reverse=True)
         leaderboard_text = "\n".join(
-            [f"<@{user}> — ✅ {stats['correct']} correct} tries"
+            [f"<@{user}> — ✅ {stats['correct']} correct / 🎯 {stats['tries']} tries"
              for user, stats in sorted_stats[:10]]
         )
 
         embed = discord.Embed(
-            title="🏆 Leaderboard",
+            title="🏆 Global Leaderboard",
             description=leaderboard_text,
             color=discord.Color.gold()
         )
@@ -107,10 +120,26 @@ class GuessView(discord.ui.View):
 # --- DAILY RESET ---
 @tasks.loop(hours=24)
 async def reset_word(bot: commands.Bot):
-    global current_word, pinned_message
-    current_word = get_new_word()
-
+    global current_word, previous_word, pinned_message
     game_channel = bot.get_channel(GAME_CHANNEL_ID)
+
+    # Announce yesterday's word and winners
+    if current_word:
+        winners = word_leaderboards.get(current_word, [])
+        if winners:
+            winners_text = "\n".join([f"🎉 <@{uid}>" for uid in winners])
+        else:
+            winners_text = "😢 Nobody guessed it yesterday."
+
+        await game_channel.send(
+            f"🕛 Yesterday's word was: **{current_word.upper()}**\n\n"
+            f"**Winners:**\n{winners_text}\n\n"
+            "A new word has been chosen! 🎮"
+        )
+
+    # reset word
+    previous_word = current_word
+    current_word = get_new_word()
 
     # delete all messages except pinned
     await game_channel.purge(limit=100, check=lambda m: not m.pinned)
@@ -151,7 +180,6 @@ async def before_reset_word():
 
 # --- SETUP FUNCTION ---
 def setup_game(bot: commands.Bot):
-    # Start reset loop
     @bot.event
     async def on_ready():
         global current_word, pinned_message
