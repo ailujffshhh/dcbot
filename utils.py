@@ -1,37 +1,11 @@
 import re
-import os
-import json
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 import PyPDF2
 
-CONVERSATION_FILE = "conversations.json"
-
-def clean_text(text: str) -> str:
-    # Remove invisible/control characters
-    text = re.sub(r"[\x00-\x1F\x7F]", "", text)
-    # Normalize whitespace
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-def split_text(text: str, prefix_length: int = 0, limit: int = 2000):
-    """
-    Split text into chunks <= limit, accounting for prefix_length (like mentions)
-    """
-    text = clean_text(text)
-    max_len = limit - prefix_length
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + max_len
-        chunks.append(text[start:end])
-        start = end
-    return chunks
-
-
-def extract_pdf_text(file_path: str) -> str:
+def extract_pdf_text(file_path):
     text = ""
     with open(file_path, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -41,7 +15,7 @@ def extract_pdf_text(file_path: str) -> str:
                 text += page_text + " "
     return text.strip()
 
-def generate_formatted_pdf(text: str, output_file="reviewer.pdf") -> str:
+def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc = SimpleDocTemplate(output_file, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=18, spaceAfter=20, alignment=1, textColor=colors.HexColor("#2E4053"))
@@ -49,26 +23,25 @@ def generate_formatted_pdf(text: str, output_file="reviewer.pdf") -> str:
     elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
     sections = text.split("\n\n")
     for sec in sections:
-        for paragraph in sec.strip().split("\n"):
-            if paragraph.strip():
-                elements.append(Paragraph(paragraph.strip(), body_style))
+        for paragraph in sec.split("\n"):
+            paragraph = paragraph.strip()
+            if paragraph:
+                elements.append(Paragraph(paragraph, body_style))
                 elements.append(Spacer(1, 4))
         elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
         elements.append(Spacer(1, 8))
     doc.build(elements)
     return output_file
 
-def load_conversations() -> dict:
-    if os.path.exists(CONVERSATION_FILE):
-        with open(CONVERSATION_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+def clean_text(text):
+    # Remove invisible characters
+    return re.sub(r'[\x00-\x1F\x7F]', '', text)
 
-def save_conversations(conversations: dict):
-    with open(CONVERSATION_FILE, "w", encoding="utf-8") as f:
-        json.dump(conversations, f, ensure_ascii=False, indent=2)
-
-def reset_conversation(user_id: str):
-    conversations = load_conversations()
-    conversations[user_id] = []
-    save_conversations(conversations)
+def split_text(text, chunk_size=2000, prefix_length=0):
+    text = clean_text(text)
+    chunks = []
+    while text:
+        chunk = text[:chunk_size - prefix_length]
+        chunks.append(chunk)
+        text = text[chunk_size - prefix_length:]
+    return chunks
