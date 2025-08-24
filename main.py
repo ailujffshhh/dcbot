@@ -106,7 +106,7 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
 )
 async def chat(interaction: discord.Interaction, prompt: str):
     await interaction.response.send_message(
-        "💬 Thinking..." 
+        "Dr. Ron is thinking..." 
     )
 
     try:
