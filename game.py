@@ -92,7 +92,7 @@ class GuessView(discord.ui.View):
 
         sorted_stats = sorted(leaderstats.items(), key=lambda x: x[1]["correct"], reverse=True)
         leaderboard_text = "\n".join(
-            [f"<@{user}> — ✅ {stats['correct']} correct / 🎯 {stats['tries']} tries"
+            [f"<@{user}> — ✅ {stats['correct']} correct} tries"
              for user, stats in sorted_stats[:10]]
         )
 
