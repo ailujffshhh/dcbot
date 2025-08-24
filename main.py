@@ -6,7 +6,7 @@ from openai import OpenAI
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
-from utils import extract_pdf_text, generate_formatted_pdf, split_text
+from utils import extract_pdf_text, generate_formatted_pdf
 
 # Load environment variables
 load_dotenv()
@@ -44,19 +44,15 @@ async def chat(interaction: discord.Interaction, prompt: str):
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-20b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style."},
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style. Limit your responses with 1 sentence only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
         )
         answer = response.choices[0].message.content
 
-        # Send the user’s question first
-        await interaction.followup.send(f"{user_mention} asked: {prompt}")
-
-        # Send answer in chunks
-        for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
-            await interaction.followup.send(f"{user_mention} {chunk}")
+        # Send both question and answer directly
+        await interaction.followup.send(f"{user_mention} asked: {prompt}\n\n{user_mention} {answer}")
 
     except Exception as e:
         if "402" in str(e):
@@ -85,7 +81,8 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
                 {"role": "system", "content": "Your name is Doc Ron. You create concise reviewers."},
                 {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
             ],
-            temperature=0
+            temperature=0,
+            max_tokens=800   # <-- control length of reviewer
         )
         reviewer_text = response.choices[0].message.content
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
