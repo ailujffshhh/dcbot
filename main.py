@@ -18,7 +18,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
 if not DISCORD_TOKEN:
-    raise ValueError("DISCORD_TOKEN is not set! Check your environment variables.")
+    raise ValueError("DISCORD_TOKEN is not set!")
 print("✅ Discord token loaded correctly.")
 
 client_ai = OpenAI(
@@ -36,7 +36,6 @@ app = FastAPI()
 async def root():
     return JSONResponse({"status": "Bot is running!"})
 
-
 def extract_pdf_text(file_path):
     text = ""
     with open(file_path, "rb") as f:
@@ -47,18 +46,15 @@ def extract_pdf_text(file_path):
                 text += page_text + " "
     return text.strip()
 
-
 def markdown_to_pdf(text):
     text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
     text = re.sub(r'`(.*?)`', r'<font face="Courier">\1</font>', text)
     text = re.sub(r'^\s*---\s*$', '<hr/>', text, flags=re.MULTILINE)
     return text
 
-
 def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc = SimpleDocTemplate(output_file, pagesize=letter)
     styles = getSampleStyleSheet()
-
     title_style = ParagraphStyle(
         "Title",
         parent=styles["Heading1"],
@@ -74,11 +70,9 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
         leading=16,
         textColor=colors.black
     )
-
     elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
     formatted_text = markdown_to_pdf(text)
     sections = formatted_text.split('<hr/>')
-
     for i, sec in enumerate(sections):
         for paragraph in sec.strip().split("\n"):
             paragraph = paragraph.strip()
@@ -88,44 +82,34 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
         if i < len(sections) - 1:
             elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
             elements.append(Spacer(1, 8))
-
     doc.build(elements)
     return output_file
 
-
-GUILD_IDS = [1405134005359349760]  
-
+GUILD_IDS = [1405134005359349760]
 
 for guild_id in GUILD_IDS:
     guild = discord.Object(id=guild_id)
 
-   @bot.tree.command(
-    name="chat",
-    description="Ask Doc Ron a question, get a response, and be a member of SBAPN Gang.",
-    guild=guild
-)
-async def chat(interaction: discord.Interaction, prompt: str):
-  
-    await interaction.response.send_message("Dr. Ron is thinking...") 
-
-    try:
-        response = client_ai.chat.completions.create(
-            model="openai/gpt-oss-120b:fireworks-ai",
-            messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor who answers questions clearly and concisely."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-
-        answer = response.choices[0].message.content
-
-      
-        await interaction.followup.send(answer) 
-
-    except Exception as e:
-        await interaction.followup.send(f"Error generating response: {str(e)}")  
-
+    @bot.tree.command(
+        name="chat",
+        description="Ask Doc Ron a question, get a response, and be a member of SBAPN Gang.",
+        guild=guild
+    )
+    async def chat(interaction: discord.Interaction, prompt: str):
+        await interaction.response.send_message("Dr. Ron is thinking...")
+        try:
+            response = client_ai.chat.completions.create(
+                model="openai/gpt-oss-120b:fireworks-ai",
+                messages=[
+                    {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor who answers questions clearly and concisely."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+            answer = response.choices[0].message.content
+            await interaction.followup.send(answer)
+        except Exception as e:
+            await interaction.followup.send(f"Error generating response: {str(e)}")
 
     @bot.tree.command(
         name="review",
@@ -138,23 +122,19 @@ async def chat(interaction: discord.Interaction, prompt: str):
                 "⚠️ Please upload a valid **PDF file**.", ephemeral=True
             )
             return
-
         await interaction.response.send_message(
             f"📄 Processing your file **{file.filename}** into a reviewer, please wait...",
             ephemeral=True
         )
-
         try:
             file_path = f"./{file.filename}"
             await file.save(file_path)
-
             pdf_text = extract_pdf_text(file_path)
             if not pdf_text:
                 await interaction.followup.send(
                     "⚠️ Could not extract any text from the PDF.", ephemeral=True
                 )
                 return
-
             response = client_ai.chat.completions.create(
                 model="openai/gpt-oss-120b:fireworks-ai",
                 messages=[
@@ -164,39 +144,30 @@ async def chat(interaction: discord.Interaction, prompt: str):
                 temperature=0
             )
             reviewer_text = response.choices[0].message.content
-
             output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
-
             await interaction.followup.send(
                 content="📝 Your reviewer is ready! Download it below:",
                 file=discord.File(output_file),
                 ephemeral=True
             )
-
             os.remove(file_path)
             os.remove(output_file)
-
         except Exception as e:
             await interaction.followup.send(
                 f"❌ Error processing file: {str(e)}", ephemeral=True
             )
 
-
 @bot.event
 async def on_ready():
     for guild_id in GUILD_IDS:
         guild = discord.Object(id=guild_id)
-        await bot.tree.sync(guild=guild) 
+        await bot.tree.sync(guild=guild)
     print(f"✅ Logged in as {bot.user}. Commands synced for guilds: {GUILD_IDS}")
-
-
 
 if __name__ == "__main__":
     def start_webserver():
         import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-
     web_thread = threading.Thread(target=start_webserver, daemon=True)
     web_thread.start()
-
     bot.run(DISCORD_TOKEN)
