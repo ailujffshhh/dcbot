@@ -57,11 +57,15 @@ async def on_message(message: discord.Message):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=200
             )
-            answer = response.choices[0].message.content
 
-            await thinking_msg.edit({user_mention} {answer}")
+            # Debug: print the full response to see the structure
+            print(response)
+
+            # Safely extract the content
+            answer = response.choices[0].message.get("content", "❌ No response from model.")
+
+            await thinking_msg.edit(content=f"{user_mention} {answer}")
 
         except Exception as e:
             if "402" in str(e):
@@ -90,9 +94,11 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
                 {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
             ],
             temperature=0,
-            max_tokens=800
         )
-        reviewer_text = response.choices[0].message.content
+
+        print(response)  # Debugging
+
+        reviewer_text = response.choices[0].message.get("content", "❌ No response from model.")
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
 
         await interaction.followup.send(
