@@ -15,25 +15,73 @@ def extract_pdf_text(file_path):
                 text += page_text + " "
     return text.strip()
 
+
+def markdown_to_pdf(text):
+
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    
+
+    text = re.sub(r'`(.*?)`', r'<font face="Courier">\1</font>', text)
+    
+ 
+    text = re.sub(r'^\s*---\s*$', '<hr/>', text, flags=re.MULTILINE)
+    
+    return text
+
+
+def split_reviewer_text(text):
+    lines = []
+    for paragraph in text.split("\n"):
+        paragraph = paragraph.strip()
+        if paragraph:
+            sentences = [s.strip() for s in paragraph.split(". ") if s.strip()]
+            lines.extend(sentences)
+    return lines
+
+
 def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc = SimpleDocTemplate(output_file, pagesize=letter)
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=18, spaceAfter=20, alignment=1, textColor=colors.HexColor("#2E4053"))
-    body_style = ParagraphStyle("Body", parent=styles["Normal"], fontSize=12, leading=16, textColor=colors.black)
-    elements = [Paragraph("Study Reviewer", title_style), Spacer(1, 12)]
-    sections = text.split("\n\n")
-    for sec in sections:
-        for paragraph in sec.split("\n"):
+
+    title_style = ParagraphStyle(
+        "Title",
+        parent=styles["Heading1"],
+        fontSize=18,
+        spaceAfter=20,
+        alignment=1,  # center
+        textColor=colors.HexColor("#2E4053")
+    )
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontSize=12,
+        leading=16,
+        textColor=colors.black
+    )
+
+    elements = []
+    elements.append(Paragraph("Study Reviewer", title_style))
+    elements.append(Spacer(1, 12))
+
+ 
+    formatted_text = markdown_to_pdf(text)
+    
+  
+    sections = formatted_text.split('<hr/>')
+    for i, sec in enumerate(sections):
+       
+        for paragraph in sec.strip().split("\n"):
             paragraph = paragraph.strip()
             if paragraph:
                 elements.append(Paragraph(paragraph, body_style))
                 elements.append(Spacer(1, 4))
-        elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
-        elements.append(Spacer(1, 8))
+
+        if i < len(sections) - 1:
+            elements.append(HRFlowable(width="100%", thickness=1, color=colors.black))
+            elements.append(Spacer(1, 8))
+    
     doc.build(elements)
     return output_file
-    
-import re
 
 import re
 
