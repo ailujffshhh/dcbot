@@ -16,6 +16,25 @@ def get_new_word():
     return random.choice(words)
 
 
+# --- FEEDBACK FUNCTION (Wordle style) ---
+def get_feedback(guess: str, word: str) -> str:
+    guess = guess.upper()
+    word = word.upper()
+
+    feedback = []
+    for i, letter in enumerate(guess):
+        if i < len(word) and letter == word[i]:
+            feedback.append("🟩")  # correct position
+        elif letter in word:
+            feedback.append("⬛")  # in word but wrong position
+        else:
+            feedback.append("🟥")  # not in word
+
+    guess_display = " ".join(list(guess))
+    feedback_display = "".join(feedback)
+    return f"{guess_display}\n{feedback_display}"
+
+
 # --- GUESS MODAL ---
 class GuessModal(discord.ui.Modal, title="Guess the Word"):
     guess = discord.ui.TextInput(label="Enter your guess", style=discord.TextStyle.short)
@@ -29,6 +48,7 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
             leaderstats[user_id] = {"correct": 0, "tries": 0}
 
         leaderstats[user_id]["tries"] += 1
+        feedback = get_feedback(self.guess.value, current_word)
 
         if self.guess.value.lower() == current_word.lower():
             leaderstats[user_id]["correct"] += 1
@@ -36,16 +56,19 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
             # Private confirmation
             await interaction.response.send_message(
                 f"✅ Correct! The word was **{current_word}** 🎉\n"
+                f"{feedback}\n\n"
                 f"Stats: {leaderstats[user_id]['correct']} correct / {leaderstats[user_id]['tries']} tries",
                 ephemeral=True
             )
 
             # Public announcement
             await game_channel.send(
-                f"🎉 <@{user_id}> guessed the word correctly! The word was **{current_word}** with {leaderstats[user_id]['tries'] tries."
+                f"🎉 <@{user_id}> guessed the word correctly! The word was **{current_word}** "
+                f"with {leaderstats[user_id]['tries']} tries."
             )
         else:
             await interaction.response.send_message(
+                f"{feedback}\n\n"
                 f"❌ Wrong guess. Try again!\n"
                 f"Stats: {leaderstats[user_id]['correct']} correct / {leaderstats[user_id]['tries']} tries",
                 ephemeral=True
