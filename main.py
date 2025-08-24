@@ -20,7 +20,7 @@ client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_K
 # Discord bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix=None, intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)  # Added a prefix
 
 # FastAPI app
 app = FastAPI()
@@ -74,7 +74,6 @@ async def on_message(message: discord.Message):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=200
             )
 
             # Safely extract the content
@@ -89,8 +88,11 @@ async def on_message(message: discord.Message):
                 await thinking_msg.edit(content=f"{user_mention} ❌ You've hit the monthly credit limit. Please try again later.")
             else:
                 await thinking_msg.edit(content=f"{user_mention} ❌ Error: {str(e)}")
+        
+        # Return here to prevent processing commands for mentions
+        return
     
-    # Important: Process commands after handling mentions
+    # Only process commands for messages that aren't mentions
     await bot.process_commands(message)
 
 # ---------------- REVIEW COMMAND ----------------
@@ -114,7 +116,6 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
                 {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
             ],
             temperature=0,
-            max_tokens=800
         )
 
         if response.choices and response.choices[0].message.content:
