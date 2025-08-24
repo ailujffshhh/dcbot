@@ -76,7 +76,7 @@ class GuessModal(discord.ui.Modal, title="Guess the Word"):
 
             # Public announcement
             await game_channel.send(
-                f"🎉 <@{user_id}> guessed the word correctly! The word was **{current_word.upper()}** "
+                f"🎉 <@{user_id}> guessed the word correctly! "
                 f"with {leaderstats[user_id]['tries']} tries."
             )
         else:
