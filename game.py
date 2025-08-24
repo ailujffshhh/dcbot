@@ -178,6 +178,49 @@ async def before_reset_word():
     await discord.Client.wait_until_ready
 
 
+# --- AUTO DELETE USER MESSAGES ---
+@bot.event
+async def on_message(message):
+    # Ignore bot messages
+    if message.author == bot.user:
+        return
+    
+    # Replace with your game channel ID
+    game_channel_id = 123456789012345678  
+
+    if message.channel.id == game_channel_id:
+        try:
+            await message.delete()  # delete user’s message
+        except discord.Forbidden:
+            print("Missing permissions to delete messages in the game channel.")
+        except discord.NotFound:
+            pass  
+
+        # Now DM them instructions
+        try:
+            dm_channel = await message.author.create_dm()
+            
+            # Send text first
+            await dm_channel.send(
+                "Hey Mr with gentle hands! Please don’t type directly in the game channel. "
+                "Use the **buttons** to play instead. Here’s how it works 👇"
+            )
+
+            # Send video (replace with your actual file or link)
+            await dm_channel.send(
+                "https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov?ex=68ac2d77&is=68aadbf7&hm=260b976ab612cac87fb77264afddffd87f34c48301696e81651d1921f4c12ec7&"
+            )
+            
+            # OR if you have a local file instead:
+            # await dm_channel.send(file=discord.File("tutorial.mp4"))
+
+        except discord.Forbidden:
+            print(f"Could not DM {message.author}. They might have DMs disabled.")
+    
+    # Process commands too
+    await bot.process_commands(message)
+
+
 # --- SETUP FUNCTION ---
 def setup_game(bot: commands.Bot):
     @bot.event
@@ -212,3 +255,6 @@ def setup_game(bot: commands.Bot):
             await pinned_message.pin()
 
             print(f"✅ Game ready, word is: {current_word}")
+
+    # register on_message
+    bot.event(on_message)
