@@ -13,9 +13,11 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
 client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_KEY)
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=None, intents=intents)
+
 app = FastAPI()
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -28,30 +30,53 @@ GUILD_IDS = [1405134005359349760]
 async def chat(interaction: discord.Interaction, prompt: str):
     user_mention = interaction.user.mention
     await interaction.response.send_message(f"{user_mention} asked: {prompt}\nDr. Ron is thinking...")
+
     try:
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Make your responses a casual Filipino style."},
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
         )
         answer = response.choices[0].message.content
-        for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
-            await interaction.followup.send(f"{user_mention} {chunk}")
+
     except Exception as e:
-        await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
+        # Handle 402 credit limit by resetting conversation
+        if hasattr(e, "args") and len(e.args) > 0 and "402" in str(e.args[0]):
+            try:
+                response = client_ai.chat.completions.create(
+                    model="openai/gpt-oss-120b:fireworks-ai",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7
+                )
+                answer = response.choices[0].message.content
+            except Exception as e2:
+                await interaction.followup.send(f"{user_mention} ❌ Error after retry: {str(e2)}")
+                return
+        else:
+            await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
+            return
+
+    # Split and send in 2000-character chunks
+    for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
+        await interaction.followup.send(f"{user_mention} {chunk}")
 
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
         await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
         return
-    await interaction.response.send_message(f"📄 Processing your file **{file.filename}** into a reviewer, please wait...", ephemeral=True)
+
+    await interaction.response.send_message(
+        f"📄 Processing your file **{file.filename}** into a reviewer, please wait...", ephemeral=True
+    )
+
     try:
         file_path = f"./{file.filename}"
         await file.save(file_path)
+
         pdf_text = extract_pdf_text(file_path)
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
@@ -63,9 +88,16 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         )
         reviewer_text = response.choices[0].message.content
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
-        await interaction.followup.send(content="📝 Your reviewer is ready! Download it below:", file=discord.File(output_file), ephemeral=True)
+
+        await interaction.followup.send(
+            content="📝 Your reviewer is ready! Download it below:",
+            file=discord.File(output_file),
+            ephemeral=True
+        )
+
         os.remove(file_path)
         os.remove(output_file)
+
     except Exception as e:
         await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
@@ -77,5 +109,8 @@ async def on_ready():
 
 if __name__ == "__main__":
     import uvicorn
-    threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))), daemon=True).start()
+    threading.Thread(
+        target=lambda: uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))),
+        daemon=True
+    ).start()
     bot.run(DISCORD_TOKEN)
