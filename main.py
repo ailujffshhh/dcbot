@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
 from game import setup_game
+from game import setup_game, handle_game_message
 
 # Load environment variables
 load_dotenv()
@@ -41,17 +42,22 @@ processed_messages = set()
 async def on_message(message: discord.Message):
     global processed_messages
 
-    # Prevent duplicate handling
+    if message.author.bot:
+        return
+
+    # avoid duplicates
     if message.id in processed_messages:
         return
     processed_messages.add(message.id)
     if len(processed_messages) > 1000:
         processed_messages = set(list(processed_messages)[-500:])
 
-    if message.author.bot:
-        return
+    # --- let game.py handle game channel messages ---
+    handled = await handle_game_message(message)
+    if handled:
+        return  # stop here, don’t let mention/chatbot run in game channel
 
-    # If bot is mentioned → reply with AI
+    # --- chatbot when bot is mentioned ---
     if bot.user.mentioned_in(message):
         user_mention = message.author.mention
         prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
@@ -84,9 +90,9 @@ async def on_message(message: discord.Message):
             else:
                 await thinking_msg.edit(content=f"{user_mention} ❌ Error: {str(e)}")
 
-        return  # don’t process commands if it was a mention
+        return
 
-    # Let commands and game.py’s on_message run
+    # --- allow commands ---
     await bot.process_commands(message)
 
 # ---------------- REVIEW COMMAND ----------------
