@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
-from game import setup_game
 from game import setup_game, handle_game_message
 
 # Load environment variables
@@ -37,7 +36,7 @@ GUILD_IDS = [1405134005359349760]
 # Track processed messages to prevent duplicates
 processed_messages = set()
 
-# ---------------- MENTION CHAT ----------------
+# ---------------- MENTION CHAT + GAME HANDLER ----------------
 @bot.event
 async def on_message(message: discord.Message):
     global processed_messages
@@ -161,7 +160,6 @@ async def on_ready():
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
     import uvicorn
-    import asyncio
 
     # Run FastAPI in separate thread
     def run_fastapi():
