@@ -190,34 +190,32 @@ async def before_reset_word():
 
 
 # --- AUTO DELETE USER MESSAGES + DM ---
-async def on_message(message: discord.Message):
-    if message.author.bot:
-        return
+async def handle_game_message(message: discord.Message):
+    """Delete non-bot messages in the game channel and DM instructions."""
+    if message.channel.id != GAME_CHANNEL_ID or message.author.bot:
+        return False  # not handled by game
 
-    if message.channel.id == GAME_CHANNEL_ID:
-        try:
-            await message.delete()
-        except discord.Forbidden:
-            print("⚠️ Missing permissions to delete messages in game channel.")
-        except discord.NotFound:
-            pass
+    try:
+        await message.delete()
+    except discord.Forbidden:
+        print("⚠️ Missing permissions to delete messages in game channel.")
+    except discord.NotFound:
+        pass
 
-        # DM the tutorial video + text
-        try:
-            dm_channel = await message.author.create_dm()
-            await dm_channel.send(
-                "Hey Mr, Don't be a SBAPN.\n"
-                "Please don’t type directly in the game channel!\n"
-                "Use the **🎮 Try to Guess** button instead.\n\n"
-            )
-            await dm_channel.send(
-                content="https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov"
-            )
-        except discord.Forbidden:
-            print(f"⚠️ Cannot DM {message.author}, DMs are closed.")
+    try:
+        dm_channel = await message.author.create_dm()
+        await dm_channel.send(
+            "Hey Mr, Don't be a SBAPN.\n"
+            "Please don’t type directly in the game channel!\n"
+            "Use the **🎮 Try to Guess** button instead.\n\n"
+        )
+        await dm_channel.send(
+            content="https://cdn.discordapp.com/attachments/1024688013525143562/1409107868640219146/0E9DBE6B-59C7-4FD3-ADF0-67D70D4A8627.mov"
+        )
+    except discord.Forbidden:
+        print(f"⚠️ Cannot DM {message.author}, DMs are closed.")
 
-    # ✅ use message.client instead of bot
-    await message.client.process_commands(message)
+    return True  # handled
 
 
 # --- SETUP FUNCTION ---
