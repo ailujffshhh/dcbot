@@ -43,23 +43,12 @@ async def chat(interaction: discord.Interaction, prompt: str):
         answer = response.choices[0].message.content
 
     except Exception as e:
-        # Handle 402 credit limit by resetting conversation
-        if hasattr(e, "args") and len(e.args) > 0 and "402" in str(e.args[0]):
-            try:
-                response = client_ai.chat.completions.create(
-                    model="openai/gpt-oss-120b:fireworks-ai",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-                answer = response.choices[0].message.content
-            except Exception as e2:
-                await interaction.followup.send(f"{user_mention} ❌ Error after retry: {str(e2)}")
-                return
+        if "402" in str(e):  # catch only 402 credit limit error
+            await interaction.followup.send(f"{user_mention} ❌ You’ve hit the **monthly credit limit**. Please try again later.")
         else:
             await interaction.followup.send(f"{user_mention} ❌ Error: {str(e)}")
-            return
+        return
 
-    # Split and send in 2000-character chunks
     for chunk in split_text(answer, prefix_length=len(user_mention) + 1):
         await interaction.followup.send(f"{user_mention} {chunk}")
 
@@ -99,7 +88,10 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
         os.remove(output_file)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
+        if "402" in str(e):  # catch only 402 credit limit error
+            await interaction.followup.send("❌ You’ve hit the **monthly credit limit**. Please try again later.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
 @bot.event
 async def on_ready():
