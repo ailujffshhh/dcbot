@@ -39,6 +39,9 @@ processed_messages = set()
 # ---------------- MENTION CHAT ----------------
 @bot.event
 async def on_message(message: discord.Message):
+    # Declare global before using the variable
+    global processed_messages
+    
     # Prevent processing the same message twice
     if message.id in processed_messages:
         return
@@ -47,7 +50,6 @@ async def on_message(message: discord.Message):
     # Clean up old message IDs to prevent memory issues
     if len(processed_messages) > 1000:
         # Keep only the most recent 500 messages
-        global processed_messages
         processed_messages = set(list(processed_messages)[-500:])
     
     if message.author.bot:
