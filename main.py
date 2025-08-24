@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
-from game import setup_game
+from game import setup_game, handle_game_message  # ✅ import handler
 
 # Load environment variables
 load_dotenv()
@@ -52,9 +52,9 @@ async def on_message(message: discord.Message):
         processed_messages = set(list(processed_messages)[-500:])
 
     # --- let game.py handle game channel messages ---
-    handled = await handle_game_message(message)
+    handled = await handle_game_message(message, bot)  # ✅ proper call
     if handled:
-        return  # stop here, don’t let mention/chatbot run in game channel
+        return
 
     # --- chatbot when bot is mentioned ---
     if bot.user.mentioned_in(message):
@@ -98,9 +98,7 @@ async def on_message(message: discord.Message):
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message(
-            "⚠️ Please upload a valid **PDF file**.", ephemeral=True
-        )
+        await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
         return
 
     await interaction.response.send_message(
@@ -161,11 +159,10 @@ async def on_ready():
 if __name__ == "__main__":
     import uvicorn
 
-    # Run FastAPI in separate thread
     def run_fastapi():
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
 
     threading.Thread(target=run_fastapi, daemon=True).start()
 
-    setup_game(bot)  # register game events
+    setup_game(bot)
     bot.run(DISCORD_TOKEN)
