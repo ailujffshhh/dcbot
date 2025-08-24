@@ -12,41 +12,41 @@ from reportlab.lib import colors
 from fastapi import FastAPI
 import threading
 
-# Load environment variables
+
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
-# Debug: check if token is loaded correctly
+
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN is not set! Check your environment variables.")
 print("✅ Discord token loaded correctly.")
 
-# Initialize OpenAI client
+
 client_ai = OpenAI(
     base_url="https://router.huggingface.co/v1",
     api_key=HF_API_KEY,
 )
 
-# Discord bot setup
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=None, intents=intents)
 
-# FastAPI web server to keep bot alive on Render
+
 app = FastAPI()
 
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
 
-# Discord events
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
     print(f"✅ Logged in as {bot.user}")
 
-# PDF processing functions
+
 def extract_pdf_text(file_path):
     text = ""
     with open(file_path, "rb") as f:
@@ -100,7 +100,7 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc.build(elements)
     return output_file
 
-# /review command
+
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
@@ -115,11 +115,11 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
     )
 
     try:
-        # Save PDF locally
+      
         file_path = f"./{file.filename}"
         await file.save(file_path)
 
-        # Extract text
+       
         pdf_text = extract_pdf_text(file_path)
         if not pdf_text:
             await interaction.followup.send(
@@ -127,28 +127,28 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             )
             return
 
-        # Generate reviewer using AI
+      
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. Avoid using '-'."},
+                {"role": "system", "content": "Your name is Doc Ron, You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. Avoid using '-'."},
                 {"role": "user", "content": f"Convert the following handout into a bullet-point reviewer:\n\n{pdf_text}"}
             ],
             temperature=0
         )
         reviewer_text = response.choices[0].message.content
 
-        # Generate PDF
+      
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
 
-        # Send PDF back
+       
         await interaction.followup.send(
             content="📝 Your reviewer is ready! Download it below:",
             file=discord.File(output_file),
             ephemeral=True
         )
 
-        # Cleanup
+     
         os.remove(file_path)
         os.remove(output_file)
 
@@ -157,9 +157,9 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             f"❌ Error processing file: {str(e)}", ephemeral=True
         )
 
-# Run bot and web server
+
 if __name__ == "__main__":
-    # Run FastAPI in separate thread
+   
     def start_webserver():
         import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
@@ -167,5 +167,5 @@ if __name__ == "__main__":
     web_thread = threading.Thread(target=start_webserver, daemon=True)
     web_thread.start()
 
-    # Run Discord bot
+
     bot.run(DISCORD_TOKEN)
