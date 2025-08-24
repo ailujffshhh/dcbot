@@ -96,8 +96,7 @@ for guild_id in GUILD_IDS:
         guild=guild
     )
     async def chat(interaction: discord.Interaction, prompt: str):
-        await interaction.response.send_message(f"{interaction.user} typed: {prompt}")
-        await interaction.response.send_message("Dr. Ron is thinking...")
+        await interaction.response.send_message(f"💬 {interaction.user} asked: {prompt}\nDr. Ron is thinking...")
         try:
             response = client_ai.chat.completions.create(
                 model="openai/gpt-oss-120b:fireworks-ai",
