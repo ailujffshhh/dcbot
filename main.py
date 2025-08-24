@@ -1,108 +1,78 @@
 import os
+import threading
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from openai import OpenAI
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-import threading
-from utils import extract_pdf_text, generate_formatted_pdf
-from game import setup_game, handle_game_message  # ✅ import handler
+from openai import OpenAI
 
-# Load environment variables
+from utils import extract_pdf_text, generate_formatted_pdf
+from game import setup_game, handle_game_message
+from chatbot import handle_chatbot_message
+
+# ----- Env -----
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
-# OpenAI client (HuggingFace proxy)
+# ----- OpenAI (HuggingFace router) -----
 client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_KEY)
 
-# Discord bot setup
+# ----- Discord Bot -----
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# FastAPI app
+# ----- FastAPI (health check) -----
 app = FastAPI()
-
 @app.get("/")
 @app.head("/")
 async def root():
     return JSONResponse({"status": "Bot is running!"})
 
-# Guild where slash commands will sync
+# Optional: limit slash command sync to a guild for faster updates
 GUILD_IDS = [1405134005359349760]
 
-# Track processed messages to prevent duplicates
+# Dedup message IDs
 processed_messages = set()
 
-# ---------------- MENTION CHAT + GAME HANDLER ----------------
+# ========== MESSAGE ROUTER ==========
 @bot.event
 async def on_message(message: discord.Message):
     global processed_messages
-
     if message.author.bot:
         return
 
-    # avoid duplicates
+    # prevent duplicates
     if message.id in processed_messages:
         return
     processed_messages.add(message.id)
     if len(processed_messages) > 1000:
         processed_messages = set(list(processed_messages)[-500:])
 
-    # --- let game.py handle game channel messages ---
-    handled = await handle_game_message(message, bot)  # ✅ proper call
+    # 1) Let the game own its channel(s)
+    handled = await handle_game_message(message, bot)
     if handled:
         return
 
-    # --- chatbot when bot is mentioned ---
-    if bot.user.mentioned_in(message):
-        user_mention = message.author.mention
-        prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
-
-        if not prompt:
-            await message.reply(" Hi! Mention me with a question like: `@Dr. Ron what is photosynthesis?`")
-            return
-
-        thinking_msg = await message.reply(" Doc Ron is thinking...")
-
-        try:
-            response = client_ai.chat.completions.create(
-                model="openai/gpt-oss-120b:fireworks-ai",
-                messages=[
-                    {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Respond in casual Filipino style. Limit your responses with 1 sentence only."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-            )
-
-            if response.choices and response.choices[0].message.content:
-                answer = response.choices[0].message.content
-                await thinking_msg.edit(content=f"{user_mention} {answer}")
-            else:
-                await thinking_msg.edit(content=f"{user_mention} ❌ No response from model.")
-
-        except Exception as e:
-            if "402" in str(e):
-                await thinking_msg.edit(content=f"{user_mention} ❌ You've hit the monthly credit limit. Please try again later.")
-            else:
-                await thinking_msg.edit(content=f"{user_mention} ❌ Error: {str(e)}")
-
+    # 2) Chatbot mention handler
+    handled = await handle_chatbot_message(message, bot, client_ai)
+    if handled:
         return
 
-    # --- allow commands ---
+    # 3) Finally, allow commands
     await bot.process_commands(message)
 
-# ---------------- REVIEW COMMAND ----------------
+# ========== /review SLASH COMMAND ==========
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.lower().endswith(".pdf"):
-        await interaction.response.send_message("⚠️ Please upload a valid **PDF file**.", ephemeral=True)
+        await interaction.response.send_message("⚠️ Please upload a valid PDF file.", ephemeral=True)
         return
 
     await interaction.response.send_message(
-        f"📄 Processing your file **{file.filename}** into a reviewer, stay still motherfucker...",
+        f"📄 Processing your file **{file.filename}** into a reviewer...",
         ephemeral=True
     )
 
@@ -117,11 +87,15 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
             await interaction.followup.send("⚠️ Could not extract any text from the PDF.", ephemeral=True)
             return
 
-        # Generate reviewer with AI
+        # Generate reviewer
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. Do not use dashes `-`."},
+                {
+                    "role": "system",
+                    "content": "You create concise bullet-point reviewers from study handouts. "
+                               "No reasoning or extra commentary. Do not use dashes '-'."
+                },
                 {"role": "user", "content": f"Convert this handout into a bullet-point reviewer:\n\n{pdf_text}"}
             ],
             temperature=0
@@ -142,10 +116,11 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
     except Exception as e:
         await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
-# ---------------- READY EVENT ----------------
+# ========== READY ==========
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
+    # Fast guild sync (optional)
     for guild_id in GUILD_IDS:
         try:
             guild = discord.Object(id=guild_id)
@@ -155,7 +130,7 @@ async def on_ready():
         except Exception as e:
             print(f"⚠️ Failed to sync commands to guild {guild_id}: {e}")
 
-# ---------------- MAIN ----------------
+# ========== MAIN ==========
 if __name__ == "__main__":
     import uvicorn
 
@@ -164,5 +139,5 @@ if __name__ == "__main__":
 
     threading.Thread(target=run_fastapi, daemon=True).start()
 
-    setup_game(bot)
+    setup_game(bot)  # start tasks/listeners owned by the game
     bot.run(DISCORD_TOKEN)
