@@ -100,6 +100,29 @@ def generate_formatted_pdf(text, output_file="reviewer.pdf"):
     doc.build(elements)
     return output_file
 
+@bot.tree.command(name="chat", description="Ask Doc Ron a question, get a response, be a member of SBAPN Gang.")
+async def chat(interaction: discord.Interaction, prompt: str):
+    await interaction.response.send_message(
+        "💬 Thinking...", ephemeral=True
+    )
+
+    try:
+        response = client_ai.chat.completions.create(
+            model="openai/gpt-oss-120b:fireworks-ai",
+            messages=[
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor who answers questions clearly and concisely."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+
+        answer = response.choices[0].message.content
+        await interaction.followup.send(answer, ephemeral=True)
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"❌ Error generating response: {str(e)}", ephemeral=True
+        )
 
 @bot.tree.command(name="review", description="Upload a PDF handout to convert it into a reviewer")
 async def review(interaction: discord.Interaction, file: discord.Attachment):
