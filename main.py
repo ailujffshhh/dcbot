@@ -57,13 +57,14 @@ async def on_message(message: discord.Message):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
+                max_tokens=200
             )
 
             # Debug: print the full response to see the structure
             print(response)
 
             # Safely extract the content
-            answer = response.choices[0].message.get("content", "❌ No response from model.")
+            answer = response.choices[0].message.content or "❌ No response from model."
 
             await thinking_msg.edit(content=f"{user_mention} {answer}")
 
@@ -94,11 +95,12 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
                 {"role": "user", "content": f"Convert the following handout into bullet points:\n\n{pdf_text}"}
             ],
             temperature=0,
+            max_tokens=800
         )
 
         print(response)  # Debugging
 
-        reviewer_text = response.choices[0].message.get("content", "❌ No response from model.")
+        reviewer_text = response.choices[0].message.content or "❌ No response from model."
         output_file = generate_formatted_pdf(reviewer_text, f"{file.filename}_REVIEWER.pdf")
 
         await interaction.followup.send(
