@@ -32,7 +32,7 @@ async def chat(interaction: discord.Interaction, prompt: str):
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Make your responses casual Filipino (Tagalog)."},
+                {"role": "system", "content": "Your name is Doc Ron. You are a helpful tutor. Make your responses casual Filipino (Tagalog). Limit your response to 1999 characters"},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
