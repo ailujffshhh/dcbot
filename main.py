@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import threading
 from utils import extract_pdf_text, generate_formatted_pdf
-import asyncio
 from game import setup_game
 
 # Load environment variables
@@ -21,7 +20,7 @@ client_ai = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_K
 # Discord bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)  # Added a prefix
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # FastAPI app
 app = FastAPI()
@@ -40,23 +39,19 @@ processed_messages = set()
 # ---------------- MENTION CHAT ----------------
 @bot.event
 async def on_message(message: discord.Message):
-    # Declare global before using the variable
     global processed_messages
-    
-    # Prevent processing the same message twice
+
+    # Prevent duplicate handling
     if message.id in processed_messages:
         return
     processed_messages.add(message.id)
-    
-    # Clean up old message IDs to prevent memory issues
     if len(processed_messages) > 1000:
-        # Keep only the most recent 500 messages
         processed_messages = set(list(processed_messages)[-500:])
-    
-    if message.author.bot:
-        return  # ignore other bots
 
-    # Check if bot is mentioned
+    if message.author.bot:
+        return
+
+    # If bot is mentioned → reply with AI
     if bot.user.mentioned_in(message):
         user_mention = message.author.mention
         prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
@@ -77,7 +72,6 @@ async def on_message(message: discord.Message):
                 temperature=0.7,
             )
 
-            # Safely extract the content
             if response.choices and response.choices[0].message.content:
                 answer = response.choices[0].message.content
                 await thinking_msg.edit(content=f"{user_mention} {answer}")
@@ -89,11 +83,10 @@ async def on_message(message: discord.Message):
                 await thinking_msg.edit(content=f"{user_mention} ❌ You've hit the monthly credit limit. Please try again later.")
             else:
                 await thinking_msg.edit(content=f"{user_mention} ❌ Error: {str(e)}")
-        
-        # Return here to prevent processing commands for mentions
-        return
-    
-    # Only process commands for messages that aren't mentions
+
+        return  # don’t process commands if it was a mention
+
+    # Let commands and game.py’s on_message run
     await bot.process_commands(message)
 
 # ---------------- REVIEW COMMAND ----------------
@@ -111,55 +104,45 @@ async def review(interaction: discord.Interaction, file: discord.Attachment):
     )
 
     try:
-        # Save PDF locally
+        # Save locally
         file_path = f"./{file.filename}"
         await file.save(file_path)
 
         # Extract text
         pdf_text = extract_pdf_text(file_path)
         if not pdf_text:
-            await interaction.followup.send(
-                "⚠️ Could not extract any text from the PDF.", ephemeral=True
-            )
+            await interaction.followup.send("⚠️ Could not extract any text from the PDF.", ephemeral=True)
             return
 
-        # Generate reviewer using AI (non-thinking mode)
+        # Generate reviewer with AI
         response = client_ai.chat.completions.create(
             model="openai/gpt-oss-120b:fireworks-ai",
             messages=[
-                {"role": "system", "content": "You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. PLease prevent using '-' or dash because ReportLab doesn't recognize the tag. If you are adding like one-direction make it one direction (just space)."},
-                {"role": "user", "content": f"Convert the following handout into a bullet-point reviewer:\n\n{pdf_text}. Do not add - or dash to your words"}
+                {"role": "system", "content": "You are a helpful tutor that creates concise and easy-to-read reviewers from study handouts. Do NOT include reasoning or extra commentary. Do not use dashes `-`."},
+                {"role": "user", "content": f"Convert this handout into a bullet-point reviewer:\n\n{pdf_text}"}
             ],
             temperature=0
         )
-        print(response.choices[0].message.content)
+
         reviewer_text = response.choices[0].message.content
+        output_file = generate_formatted_pdf(reviewer_text, f"{file.filename} (REVIEWER).pdf")
 
-        # Generate formatted PDF
-        output_file = generate_formatted_pdf(reviewer_text, "**{file.name}** (REVIEWER).pdf")
-
-        # Send PDF to user
         await interaction.followup.send(
             content="📝 Your reviewer is ready! Download it below:",
             file=discord.File(output_file),
             ephemeral=True
         )
 
-        # Cleanup
         os.remove(file_path)
         os.remove(output_file)
 
     except Exception as e:
-        await interaction.followup.send(
-            f"❌ Error processing file: {str(e)}", ephemeral=True
-        )
+        await interaction.followup.send(f"❌ Error processing file: {str(e)}", ephemeral=True)
 
 # ---------------- READY EVENT ----------------
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
-    
-    # Sync commands to all guilds
     for guild_id in GUILD_IDS:
         try:
             guild = discord.Object(id=guild_id)
@@ -172,14 +155,13 @@ async def on_ready():
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
     import uvicorn
-    
-    # Run FastAPI in a separate thread
+    import asyncio
+
+    # Run FastAPI in separate thread
     def run_fastapi():
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-    
-    fastapi_thread = threading.Thread(target=run_fastapi, daemon=True)
-    fastapi_thread.start()
 
-    setup_game(bot)
-    # Run the Discord bot
+    threading.Thread(target=run_fastapi, daemon=True).start()
+
+    setup_game(bot)  # register game events
     bot.run(DISCORD_TOKEN)
